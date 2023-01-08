@@ -10,6 +10,7 @@
 #include "http.h"
 #include "nvs_flash.h"
 #include "magneto.h"
+#include "gps.h"
 
 extern "C" void app_main() {
   printf("Hello.\n");
@@ -18,11 +19,15 @@ extern "C" void app_main() {
 
   //start_webserver();
 
-  init_magneto();
+  magneto_init();
+  gps_init();
 
- int ticks = pdMS_TO_TICKS(1000);
+  int ticks = pdMS_TO_TICKS(1000);
   while (true) {
     vTaskDelay(ticks);
-    printf("Got heading: %f degrees\n",  get_heading());
+    printf("Got heading: %f degrees\n",  magneto_get_heading());
+    lat_long_t lat_long = gps_read();
+    printf("Got fix %f, %f\n", lat_long.latitude, lat_long.longitude);
+
   }
 }

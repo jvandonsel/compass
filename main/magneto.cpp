@@ -72,7 +72,7 @@ static esp_err_t i2c_master_init(void) {
 }
 
 
-bool init_magneto() {
+bool magneto_init() {
     ESP_ERROR_CHECK(i2c_master_init());
     printf("I2C initialized successfully\n");
 
@@ -88,7 +88,7 @@ bool init_magneto() {
     return data[0] == 0x40;
 }
 
-float get_heading() {
+float magneto_get_heading() {
     int16_t x, y;
     ESP_ERROR_CHECK(lsm303_register_read(LSM303_OUTX_L_REG_M, (uint8_t*)&x,  2));
     ESP_ERROR_CHECK(lsm303_register_read(LSM303_OUTY_L_REG_M, (uint8_t*)&y,  2));

@@ -4,9 +4,9 @@
  * Init the magnetometer
  * Returns true on success
  */
-bool init_magneto();
+bool magneto_init();
 
 /**
  * Return the heading in degrees.
 */
-float get_heading();
+float magneto_get_heading();
