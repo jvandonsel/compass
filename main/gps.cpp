@@ -1,5 +1,8 @@
 /**
- * Adafruit GPS Featherwing
+ * Interface to Adafruit GPS Featherwing board with a MTK3339 GPS chipset.
+ @author Jim Van Donsel
+ @date 2023/01/14
+ 
 */
 
 #include "gps.h"
@@ -24,9 +27,18 @@ static uart_config_t uart_config = {
     .rx_flow_ctrl_thresh = 0,
     .source_clk = UART_SCLK_APB
 };
-static int intr_alloc_flags = 0;
+static const int intr_alloc_flags = 0;
+
+/**
+ *   Commands
+ */
+// Query firmware version
 #define PMTK_Q_RELEASE "$PMTK605*31\r\n"
 
+/**
+ * Open serial port for GPS chip.
+ * @return true on success
+ */
 bool gps_init() {
     ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));    
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, 17, 16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
@@ -36,17 +48,18 @@ bool gps_init() {
 
 /**
  * Convert DDMM.MM or DDDMM.MM to fractional degrees.
-*/
+ * @return fractional degrees
+ */
 static float dm_to_degrees(float dm) {
-    int degrees = dm / 100;
-    float minutes = dm - degrees * 100;
+    const int degrees = dm / 100;
+    const float minutes = dm - degrees * 100;
     return degrees + minutes/60.0;
 }
 
 
 /**
  * Parse the GPS ship serial output to get lat/long.
- * Return lat/long or 0.0/0.0 if no fix.
+ * @return lat/long or 0.0/0.0 if no fix.
  * 
  *    GPGGA,hhmmss.ss,llll.ll,a,yyyyy.yy,a,x,xx,x.x,x.x,M,x.x,M,x.x,xxxx
  *    $GNGGA,200452.000,4221.6768,N,07114.8309,W,1,07,1.20,46.9,M,-33.7,M,,*7F
@@ -65,22 +78,23 @@ static float dm_to_degrees(float dm) {
  *        x.x = Age of Differential GPS data (seconds)
  *        xxxx = Differential reference station ID
  *
-*/
+ */
 static lat_long_t parse_lat_long(char* s) {
-   lat_long_t result = {0.0,0.0};
+    lat_long_t result = {0.0,0.0};
 
-   char* p = strstr(s, "GNGGA");
-   if (p) {
+    char* p = strstr(s, "GNGGA");
+    if (p) {
         char* tok = strtok(p, ",");
         int n = 0;
         while (tok != nullptr) {
             // Extract latitude
             // TODO: only handling northern hemisphere right now.
             if (n == 2) {
-                float dm = atof(tok);
+                const float dm = atof(tok);
                 result.latitude = dm_to_degrees(dm);
             } else if (n == 4) {
-                float dm = atof(tok);
+                const float dm = atof(tok);
+                // TODO: only handling western hemisphere right now.
                 result.longitude = dm_to_degrees(dm);
                 // done
                 break;
@@ -88,18 +102,24 @@ static lat_long_t parse_lat_long(char* s) {
             tok = strtok(nullptr, ",");
             n++;
         }
-   }
+    }
 
-   return result;
-
+    return result;
 }
 
+
+/**
+   Read a blob of serial data from the GPS board, parse it, and return a lat/long structure.
+   @return lat/long, or if no valid location data can be found, returns lat/long of 0.00,0.00
+  
+*/
 lat_long_t gps_read() {
     lat_long_t result = {0.0, 0.0};
 
+    const int ticks = pdMS_TO_TICKS(20);
 
     // Read data from the UART
-    int len = uart_read_bytes(uart_num, data, BUF_SIZE - 1, 20 / portTICK_PERIOD_MS);
+    const int len = uart_read_bytes(uart_num, data, BUF_SIZE - 1, ticks);
     if (len > 0) {
         return parse_lat_long(data);
     }
