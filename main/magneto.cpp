@@ -1,5 +1,6 @@
 /*
- * LSM303AGR Magnetometer for magic compass
+ * LSM303AGR Magnetometer for Magic Compass.
+ * Interface is I2C
  *
  * Author: J Van Donsel
  * Date: 12/29/2022
@@ -9,6 +10,7 @@
 #include <string>
 #include <math.h>
 #include "compass.h"
+#include "util.h"
 #include "driver/i2c.h"
 
 #define I2C_MASTER_SCL_IO GPIO_NUM_22
@@ -88,16 +90,16 @@ bool magneto_init() {
     return data[0] == 0x40;
 }
 
-float magneto_get_heading() {
+compass_degrees_t magneto_read() {
     int16_t x, y;
     ESP_ERROR_CHECK(lsm303_register_read(LSM303_OUTX_L_REG_M, (uint8_t*)&x,  2));
     ESP_ERROR_CHECK(lsm303_register_read(LSM303_OUTY_L_REG_M, (uint8_t*)&y,  2));
 
    // Calculate the angle of the vector y,x
-    float heading = -(atan2(y, x) * 180) / M_PI;
+    float heading = -(atan2((float)y, (float)x) * 180) / M_PI;
 
     if (heading < 0) {
         heading = 360 + heading;
     }
-    return heading;
+    return (compass_degrees_t)heading;
 }

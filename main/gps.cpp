@@ -1,8 +1,9 @@
 /**
- * Interface to Adafruit GPS Featherwing board with a MTK3339 GPS chipset.
- @author Jim Van Donsel
- @date 2023/01/14
- 
+ * Magic Compass interface to Adafruit GPS Featherwing board with a MTK3339 GPS chipset.
+ * Communication to GPS board is via a serial UART at 9600 baud.
+ * @author Jim Van Donsel
+ * @date 2023/01/14
+ *           
 */
 
 #include "gps.h"
@@ -30,7 +31,7 @@ static uart_config_t uart_config = {
 static const int intr_alloc_flags = 0;
 
 /**
- *   Commands
+ *   Serial commands to the GPS board
  */
 // Query firmware version
 #define PMTK_Q_RELEASE "$PMTK605*31\r\n"
@@ -88,14 +89,22 @@ static lat_long_t parse_lat_long(char* s) {
         int n = 0;
         while (tok != nullptr) {
             // Extract latitude
-            // TODO: only handling northern hemisphere right now.
             if (n == 2) {
                 const float dm = atof(tok);
                 result.latitude = dm_to_degrees(dm);
+            } else if (n == 3) {
+                // Defining S hemisphere as negative
+                if (!strcmp(tok, "S")) {
+                    result.latitude *= -1;
+                }
             } else if (n == 4) {
                 const float dm = atof(tok);
-                // TODO: only handling western hemisphere right now.
                 result.longitude = dm_to_degrees(dm);
+            } else if (n == 5) {
+                // Defining W hemisphere as negative
+                if (!strcmp(tok, "W")) {
+                    result.longitude *= -1;
+                }
                 // done
                 break;
             }
@@ -109,14 +118,17 @@ static lat_long_t parse_lat_long(char* s) {
 
 
 /**
-   Read a blob of serial data from the GPS board, parse it, and return a lat/long structure.
-   @return lat/long, or if no valid location data can be found, returns lat/long of 0.00,0.00
-  
+*   Read a blob of serial data from the GPS board, parse it, and return a lat/long structure.
+*   Note that this function may not produce a valid lat/long value every time it's called - it
+*   depends on the asynchronous data being sent by the GPS board.
+*   
+*   @return lat/long, or if no valid location data can be found, returns lat/long of 0.00,0.00
 */
 lat_long_t gps_read() {
     lat_long_t result = {0.0, 0.0};
 
-    const int ticks = pdMS_TO_TICKS(20);
+    const int TIMEOUT_MS = 20;
+    const int ticks = pdMS_TO_TICKS(TIMEOUT_MS);
 
     // Read data from the UART
     const int len = uart_read_bytes(uart_num, data, BUF_SIZE - 1, ticks);

@@ -23,6 +23,12 @@
 #include "driver/timer.h"
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
+#include "servo.h"
+
+
+// Rotation rate [-1.0, 1.0]
+// We don't care about degree/sec, just relative rates
+typedef float rotation_rate_t;
 
 // Pins used
 const gpio_num_t SERVO_GPIO_PWM = GPIO_NUM_14;
@@ -31,21 +37,23 @@ const ledc_channel_t ledc_channel = LEDC_CHANNEL_0;
 const adc1_channel_t ADC_CHANNEL= ADC1_CHANNEL_4;
 
 // PWM frequency
-const int FREQ_HZ = 50;
-// Period in US
-const int PERIOD_US = 1.0/FREQ_HZ * 1000 * 1000;
-const ledc_timer_bit_t resolution_bit = LEDC_TIMER_10_BIT;
-const int resolution = (1 << resolution_bit) - 1;
+const int PWM_FREQ_HZ = 50;
+const int PWM_PERIOD_US = 1.0/PWM_FREQ_HZ * 1000 * 1000;
+const ledc_timer_bit_t RESOLUTION_BIT = LEDC_TIMER_10_BIT;
+const int RESOLUTION = (1 << RESOLUTION_BIT) - 1;
 
-// Servo PWM pulse widths, from the servo data sheet
+// Allowable servo PWM pulse widths, from the servo data sheet
 const int MIN_WIDTH_US = 1280;
 const int MAX_WIDTH_US = 1720;
-// The servo has a dead band in this region
-const int DEAD_BAND_LOWER_US = 1480;
-const int DEAD_BAND_UPPER_US = 1520;
-const int DEAD_BAND_CENTER_US = (DEAD_BAND_LOWER_US + DEAD_BAND_UPPER_US)/2;
-// Total allowable PWM widths to the servo
 const int RANGE_US = MAX_WIDTH_US - MIN_WIDTH_US;
+
+// The servo has a dead band in this region
+const unsigned DEAD_BAND_LOWER_US = 1480;
+const unsigned DEAD_BAND_UPPER_US = 1520;
+const unsigned DEAD_BAND_CENTER_US = (DEAD_BAND_LOWER_US + DEAD_BAND_UPPER_US)/2;
+
+// Minimum viable pulse width that causes movement
+const unsigned MINIMUM_SPEED_US = DEAD_BAND_UPPER_US + 30;
 
 // ADC for reading back position
 const int  V_REF_MV = 1100; // mv
@@ -53,13 +61,16 @@ static esp_adc_cal_characteristics_t characteristics;
 static float V_MAX = 3.0;
 
 // Control loop
+// Gain
 const float K = 0.005;
-const float RATE_LIMIT = 0.25;
+
+// Fastest rate we will allow to be commanded
+const rotation_rate_t RATE_LIMIT = 0.25;
 
 /**
  * Fetch a single voltage value from the ADC.
  */
-static float servo_read_adc() {
+static float read_adc() {
     uint32_t v_mv;
     esp_adc_cal_get_voltage((adc_channel_t)ADC_CHANNEL, &characteristics, &v_mv);
     return v_mv / 1000.0;
@@ -68,7 +79,7 @@ static float servo_read_adc() {
 /**
  * Initialize the servo ADC.
  */
-static void servo_init_adc() {
+static void init_adc() {
     adc1_config_width(ADC_WIDTH_BIT_12);
     adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN_DB_11);
     esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, V_REF_MV, &characteristics);
@@ -76,9 +87,9 @@ static void servo_init_adc() {
 
 
 /**
- * Sets the servo rotation rate between (-1.0, 1.0)
- */
-static void servo_set_rate(float rate) {
+* Convert a rotation rate [-1.0, 1.0] to a pulse width in uS
+*/
+static unsigned rate_to_pulse_width(rotation_rate_t rate) {
     if (rate < -RATE_LIMIT ) {
         rate = -RATE_LIMIT;
     } else if (rate > RATE_LIMIT) {
@@ -87,32 +98,59 @@ static void servo_set_rate(float rate) {
 
     // Computer the target pulse width in us.
     // Also flip the sign here so that a positive rate is clockwise.
-    unsigned width_us = -rate * RANGE_US/2 + DEAD_BAND_CENTER_US;
+    return -rate * RANGE_US/2 + DEAD_BAND_CENTER_US;
+}
 
+/**
+* Set the PWM pulse width in uS
+*/
+static void set_pulse_width(unsigned width_us) {
     // Pulse width converted to a duty cycle
-    float duty =  width_us / (float)PERIOD_US;
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, ledc_channel, duty * resolution);
+    float duty =  width_us / (float)PWM_PERIOD_US;
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, ledc_channel, duty * RESOLUTION);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, ledc_channel);
 }
 
 /**
- * Returns the servo position estimate in degrees.
+ * Sets the servo rotation rate between (-1.0, 1.0)
  */
-float servo_get_position() {
-    return servo_read_adc() * 360 / V_MAX;
+static void set_rate(rotation_rate_t rate) {
+    set_pulse_width(rate_to_pulse_width(rate));
 }
 
+
 /*
- * Attempt to slew the servo to the specified orientation.
- * @param target_degrees Target orientation in degrees.
- *
- * The result is a rate sent to the servo. This function
- * needs to be called periodically.
- *
+-------------------- Public Functions ----------------------------------
+*/
+
+/**
+ * Returns the servo position estimate in degrees.
  */
-void servo_update_position(float target_degrees) {
-    float pos = servo_get_position();
-    float delta = target_degrees - pos;
+relative_degrees_t servo_get_position() {
+    return read_adc() * 360 / V_MAX;
+}
+
+/**
+ * Drive the servo continually at the lowest rate
+ */
+void servo_drive_slow() {
+    set_pulse_width(MINIMUM_SPEED_US);
+}
+
+/**
+ * Attempt to slew the servo to the specified orientation.
+ * The result is a rate sent to the servo. This function
+ * needs to be called periodically, or else the servo
+ * will go right past the target.
+ *
+ * @param target_degrees Target orientation in degrees.
+ * @return Position and rate
+ *
+
+ */
+servo_status_t servo_update(relative_degrees_t target_degrees) {
+    relative_degrees_t pos = servo_get_position();
+    relative_degrees_t delta =  target_degrees - pos;
 
     if (delta > 180) {
         delta = 360 - delta;
@@ -120,11 +158,15 @@ void servo_update_position(float target_degrees) {
         delta = 380 + delta;
     }
 
-    float rate = K * delta;
+    rotation_rate_t rate = K * delta;
+    
+    set_rate(rate);
+    
+    servo_status_t status;
+    status.rate = rate;
+    status.relative_pos = pos;
 
-    printf("%.2f\t\t%.2f\t\t%.2f\n", target_degrees, pos, rate);
-
-    servo_set_rate(rate);
+    return status;
 }
 
 
@@ -145,9 +187,9 @@ bool servo_init() {
 
     memset(&timer_cfg_, 0, sizeof(timer_cfg_));
     timer_cfg_.speed_mode = LEDC_LOW_SPEED_MODE;
-    timer_cfg_.duty_resolution = resolution_bit;
+    timer_cfg_.duty_resolution = RESOLUTION_BIT;
     timer_cfg_.timer_num = ledc_timer;
-    timer_cfg_.freq_hz = FREQ_HZ;
+    timer_cfg_.freq_hz = PWM_FREQ_HZ;
     timer_cfg_.clk_cfg = LEDC_AUTO_CLK;
     ledc_timer_config(&timer_cfg_);
 
@@ -162,7 +204,7 @@ bool servo_init() {
     ledc_channel_config(&channel_config_);
 
     // Init ADC
-    servo_init_adc();
+    init_adc();
 
     return true;
 }
