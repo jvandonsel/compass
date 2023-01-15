@@ -1,3 +1,3 @@
 #pragma once
 
-const char *TAG = "compass";
+#define TAG "compass"
