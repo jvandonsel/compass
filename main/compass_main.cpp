@@ -20,61 +20,65 @@
 #include "servo.h"
 #include "util.h"
 
-bool do_logging = false;
 
 // This is Brattleboro VT, chosen randomly.
-lat_long_t target_position = {42.865807639823984, -72.58788475153355};
+gps_location_t target_location = {42.865807639823984, -72.58788475153355};
 
 // Non-volatile storage keys
 const char NVS_KEY_GPS[] = "gps";
 const char NVS_KEY_HOME[] = "home";
 
+// How often to write the GPS position to NVS
+const unsigned FLASH_WRITE_INTERVAL_SECS = 300;
+const unsigned FLASH_WRITE_INTERVAL_TICKS = pdMS_TO_TICKS(FLASH_WRITE_INTERVAL_SECS * 1000);
+
+// Top level loop period
+const int LOOP_SLEEP_MS = 250;
+const int LOOP_SLEEP_TICKS = pdMS_TO_TICKS(LOOP_SLEEP_MS);
+
+// To log or not to log
+bool do_logging = false;
+// Last known good GPS location (may be one saved to flash)
+gps_location_t last_known_good_gps_location;
+// Current GPS location in use
+gps_location_t current_gps_location;
+// Compass heading of this device
+compass_degrees_t heading;
+
 /**
  * Control loop.
  */
 void controllerTask() {
-    // Top level loop period
-    const int LOOP_SLEEP_MS = 250;
-    const int LOOP_SLEEP_TICKS = pdMS_TO_TICKS(LOOP_SLEEP_MS);
-
     // Try to read any saved GPS position as a starting point
-    lat_long_t last_known_good_gps = read_from_nvs(NVS_KEY_GPS);
-    printf("Read saved GPS lat=%f long=%f from NVS\n", last_known_good_gps.latitude, last_known_good_gps.longitude);
+    last_known_good_gps_location = read_from_nvs(NVS_KEY_GPS);
+    std::cout << "Read saved GPS " << last_known_good_gps_location.toString() << "from NVS" << std::endl;
 
-    // How often to write the GPS position to NVS
-    const unsigned FLASH_WRITE_INTERVAL_SECS = 300;
-    const unsigned FLASH_WRITE_INTERVAL_TICKS = pdMS_TO_TICKS(FLASH_WRITE_INTERVAL_SECS * 1000);
     unsigned last_flash_write_ticks = 0;
-
-    // jvd test
-    // save_to_nvs(NVS_KEY_HOME, target_position);
-    lat_long_t temp = read_from_nvs(NVS_KEY_HOME);
-    printf("Read saved home lat=%f long=%f from NVS\n", temp.latitude, temp.longitude);
 
     while (true) {
         const int ticks = xTaskGetTickCount();
 
         // Read sensors
-        const compass_degrees_t heading = magneto_read();
-        lat_long_t lat_long = gps_read();
+        heading = magneto_read();
+        current_gps_location = gps_read();
 
-        if (!lat_long.isValid()) {
+        if (!current_gps_location.isValid()) {
             // No good GPS reading this time. Use our last known good one.
-            lat_long = last_known_good_gps;
+            current_gps_location = last_known_good_gps_location;
         } else {
             // Save this GPS reading as our last known good one.
-            last_known_good_gps = lat_long;
+            last_known_good_gps_location = current_gps_location;
 
             // And save to non-volatile storage.
             // But we don't want to continually write to flash every loop, so
             // only write every N seconds.
             if (ticks - last_flash_write_ticks > FLASH_WRITE_INTERVAL_TICKS || last_flash_write_ticks == 0) {
-                save_to_nvs(NVS_KEY_GPS, lat_long);
+                save_to_nvs(NVS_KEY_GPS, current_gps_location);
                 last_flash_write_ticks = ticks;
             }
         }
 
-        if (!lat_long.isValid()) {
+        if (!current_gps_location.isValid()) {
             // No GPS position yet.
             // Drive the servo continuously at a low rate while we wait for GPS to sync.
             servo_drive_slow();
@@ -83,8 +87,6 @@ void controllerTask() {
             if (do_logging) {
                 printf(
                     "[%u]\t"
-                    "Lat: ?\t"
-                    "Long: ?\t"
                     "Mag True: %d\t"
                     "Srv Pos: %d\t\n",
                     ticks,
@@ -95,7 +97,7 @@ void controllerTask() {
             // We have a valid GPS position (either live or saved)
 
             // Compute heading from our GPS position to the target lat/long
-            const compass_degrees_t target_compass_bearing = compute_heading(lat_long, target_position);
+            const compass_degrees_t target_compass_bearing = compute_bearing(current_gps_location, target_location);
 
             // Compute next servo position, based on heading
             relative_degrees_t target_servo_position = target_compass_bearing - heading;
@@ -106,22 +108,22 @@ void controllerTask() {
             const servo_status_t servo_status = servo_update(target_servo_position);
 
             // Not required, but interesting, maybe.
-            const float dist_miles = compute_distance_miles(lat_long, target_position);
+            const float dist_miles = compute_distance_miles(current_gps_location, target_location);
 
             if (do_logging) {
                 printf(
                     "[%u]\t"
-                    "GPS: (%.4f,%.4f)\t"
-                    "Target: (%.4f,%.4f)\t"
-                    "Mag True: %d\t"
-                    "Mag Target: %d\t"
-                    "Srv Target: %d\t"
-                    "Srv Pos: %d\t"
-                    "Srv Rate: %.3f\t\t"
-                    "Dist: %.0f\t\n",
+                    "GPS: %18s  "
+                    "Target: %18s   "
+                    "Mag True: %3d   "
+                    "Bearing: %3d   "
+                    "Srv Target: %3d   "
+                    "Srv Pos: %3d "
+                    "Srv Rate: %8.3f    "
+                    "Dist: %.0f\n",
                     ticks,
-                    lat_long.latitude, lat_long.longitude,
-                    target_position.latitude, target_position.longitude,
+                    current_gps_location.toString().c_str(),
+                    target_location.toString().c_str(),
                     heading,
                     target_compass_bearing, target_servo_position,
                     servo_status.relative_pos, servo_status.rate, dist_miles);
@@ -129,39 +131,59 @@ void controllerTask() {
         }
 
         vTaskDelay(LOOP_SLEEP_TICKS);
-
     }  // end while
-}
+}  // end controller Task
 
+/**
+ * Console command handler for setting the home location.
+ */
 static int set_home_location(int argc, char **argv) {
     if (argc != 3) {
-        std::cerr << "Invalid command . Usage is 'home <latitude> <longitude>'" << std::endl;
+        std::cout << "Invalid command . Usage is 'home <latitude> <longitude>'" << std::endl;
+        std::cout << "(where latitude is positive in the N hemisphere, and longitude is negative in the W hemisphere)" << std::endl;
         return 0;
     }
 
-    lat_long_t loc;
-    loc.latitude = atof(argv[1]);
-    loc.longitude = atof(argv[2]);
-    std::cout << "Setting home location to latitude=" << loc.latitude << " longitude=" << loc.longitude << std::endl;
-    save_to_nvs(NVS_KEY_HOME, loc);
+    target_location.latitude = atof(argv[1]);
+    target_location.longitude = atof(argv[1]);
+    std::cout << "Setting home location to: " << target_location.toString() << std::endl;
+
+    // Save new location to flash.
+    save_to_nvs(NVS_KEY_HOME, target_location);
     return 0;
 }
 
+/**
+ * Console command handler for printing status
+ */
 static int print_status(int argc, char **argv) {
     do_logging = false;
-    std::cout << "Home location latitude " << target_position.latitude << std::endl;
-    std::cout << "Home location longitude " << target_position.longitude << std::endl;
-    std::cout << std::endl;
+    std::cout << "Home location: " << target_location.toString() << std::endl;
+    std::cout << "Current GPS lat/long: " << current_gps_location.toString() << std::endl;
+    std::cout << "Last known good GPS lat/long: " << last_known_good_gps_location.toString() << std::endl;
+    std::cout << "Magnetic Heading: " << heading << " degrees" << std::endl;
     return 0;
 }
 
+/**
+ * Console command handler for toggling logging on/off
+ */
 static int toggle_logging(int argc, char **argv) {
     do_logging = !do_logging;
     return 0;
 }
 
 /**
- * Main!
+ * Console command handler for printing the about mesage
+ */
+static int about(int argc, char **argv) {
+    std::cout << "Magic Compass" << std::endl;
+    std::cout << "Designed and built by Jim Van Donsel, January 2023." << std::endl;
+    return 0;
+}
+
+/**
+ * Main
  */
 extern "C" void app_main() {
     nvs_flash_init();
@@ -177,6 +199,7 @@ extern "C" void app_main() {
     esp_console_dev_uart_config_t uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_console_new_repl_uart(&uart_config, &repl_config, &repl));
 
+    // Add console commands
     const esp_console_cmd_t status_cmd = {
         .command = "status",
         .help = "Show status",
@@ -193,19 +216,26 @@ extern "C" void app_main() {
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&logging_cmd));
 
-    
+    const esp_console_cmd_t about_cmd = {
+        .command = "about",
+        .help = "About this device",
+        .hint = NULL,
+        .func = &about,
+        .argtable = nullptr};
+    ESP_ERROR_CHECK(esp_console_cmd_register(&about_cmd));
+
     const esp_console_cmd_t home_loc_cmd = {
         .command = "home",
         .help = "Set home latitude, longitude",
         .hint = NULL,
         .func = &set_home_location,
-        .argtable = nullptr
-        };
+        .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&home_loc_cmd));
 
-    // start console REPL
+    // Start the console
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 
+    // Run the controller loop
     // Does not return
     controllerTask();
 }

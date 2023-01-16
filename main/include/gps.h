@@ -3,4 +3,4 @@
 
 
 bool gps_init();
-lat_long_t gps_read();
+gps_location_t gps_read();

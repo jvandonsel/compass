@@ -26,9 +26,6 @@
 #include "servo.h"
 
 
-// Rotation rate [-1.0, 1.0]
-// We don't care about degree/sec, just relative rates
-typedef float rotation_rate_t;
 
 // Pins used
 const gpio_num_t SERVO_GPIO_PWM = GPIO_NUM_14;
