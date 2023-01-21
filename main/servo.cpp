@@ -50,7 +50,7 @@ const unsigned DEAD_BAND_UPPER_US = 1520;
 const unsigned DEAD_BAND_CENTER_US = (DEAD_BAND_LOWER_US + DEAD_BAND_UPPER_US)/2;
 
 // Minimum viable pulse width that causes movement
-const unsigned MINIMUM_SPEED_US = DEAD_BAND_UPPER_US + 30;
+const unsigned MINIMUM_SPEED_US = DEAD_BAND_UPPER_US + 20;
 
 // ADC for reading back position
 const int  V_REF_MV = 1100; // mv

@@ -18,10 +18,10 @@
  * @return Integer compass degress for a bearing between here and there
  * http://www.movable-type.co.uk/scripts/latlong.html
  */
-compass_degrees_t compute_bearing(const gps_location_t here, const gps_location_t there) {
+compass_degrees_t compute_bearing(const gps_location_degrees_t here, const gps_location_degrees_t there) {
 
-    const gps_location_t here_rad = here.asRadians();
-    const gps_location_t there_rad = there.asRadians();
+    const gps_location_radians_t here_rad = here.asRadians();
+    const gps_location_radians_t there_rad = there.asRadians();
 
     const float delta_long = there_rad.longitude - here_rad.longitude;
     const float y = cos(there_rad.latitude) * sin(delta_long);
@@ -39,9 +39,9 @@ compass_degrees_t compute_bearing(const gps_location_t here, const gps_location_
  * @return Distance in miles
  * http://www.movable-type.co.uk/scripts/latlong.html
  */
-float compute_distance_miles(const gps_location_t here, const gps_location_t there) {
-    const gps_location_t here_rad = here.asRadians();
-    const gps_location_t there_rad = there.asRadians();
+float compute_distance_miles(const gps_location_degrees_t here, const gps_location_degrees_t there) {
+    const gps_location_radians_t here_rad = here.asRadians();
+    const gps_location_radians_t there_rad = there.asRadians();
 
     const float delta_lat = there_rad.latitude - here_rad.latitude;
     const float delta_long = there_rad.longitude - here_rad.longitude;
@@ -56,7 +56,7 @@ float compute_distance_miles(const gps_location_t here, const gps_location_t the
 /**
  * Save a latitude/longitude structure to non-volatile flash
  */
-void save_to_nvs(const char* key, gps_location_t lat_long) {
+void save_to_nvs(const char* key, gps_location_degrees_t lat_long) {
     printf("Saving lat=%f long=%f to NVS\n", lat_long.latitude, lat_long.longitude);
     nvs_handle_t h;
     int err = nvs_open("storage", NVS_READWRITE, &h);
@@ -73,11 +73,11 @@ void save_to_nvs(const char* key, gps_location_t lat_long) {
  * Read a latitude/longitude structure from non-volatile flash.
  * @return lat/long structure, which contains zeros if nothing could be read.
  */
-gps_location_t read_from_nvs(const char* key) {
+gps_location_degrees_t read_from_nvs(const char* key) {
     nvs_handle_t h;
     int err = nvs_open("storage", NVS_READONLY, &h);
-    gps_location_t lat_long = {0.0, 0.0};
-    size_t size =sizeof(gps_location_t);
+    gps_location_degrees_t lat_long = {0.0, 0.0};
+    size_t size =sizeof(gps_location_degrees_t);
     err = nvs_get_blob(h, key, &lat_long, &size);
     if (err != ESP_OK) {
         fprintf(stderr, "Failed to read lat/long blob!, error=%s\n", esp_err_to_name(err));

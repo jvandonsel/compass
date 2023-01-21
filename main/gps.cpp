@@ -59,7 +59,7 @@ static float dm_to_degrees(float dm) {
 
 
 /**
- * Parse the GPS ship serial output to get lat/long.
+ * Parse the GPS chip serial output to get lat/long.
  * @return lat/long or 0.0/0.0 if no fix.
  * 
  *    GPGGA,hhmmss.ss,llll.ll,a,yyyyy.yy,a,x,xx,x.x,x.x,M,x.x,M,x.x,xxxx
@@ -80,8 +80,8 @@ static float dm_to_degrees(float dm) {
  *        xxxx = Differential reference station ID
  *
  */
-static gps_location_t parse_lat_long(char* s) {
-    gps_location_t result = {0.0,0.0};
+static gps_location_degrees_t parse_lat_long(char* s) {
+    gps_location_degrees_t result = {0.0,0.0};
 
     char* p = strstr(s, "GNGGA");
     if (p) {
@@ -124,8 +124,8 @@ static gps_location_t parse_lat_long(char* s) {
 *   
 *   @return lat/long, or if no valid location data can be found, returns lat/long of 0.00,0.00
 */
-gps_location_t gps_read() {
-    gps_location_t result = {0.0, 0.0};
+gps_location_degrees_t gps_read() {
+    gps_location_degrees_t result = {0.0, 0.0};
 
     const int TIMEOUT_MS = 20;
     const int ticks = pdMS_TO_TICKS(TIMEOUT_MS);

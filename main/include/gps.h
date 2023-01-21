@@ -3,4 +3,4 @@
 
 
 bool gps_init();
-gps_location_t gps_read();
+gps_location_degrees_t gps_read();
