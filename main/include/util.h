@@ -52,5 +52,8 @@ struct gps_location_degrees_t : lat_long_t {
 
 extern compass_degrees_t compute_bearing(const gps_location_degrees_t here, const gps_location_degrees_t there);
 extern float compute_distance_miles(const gps_location_degrees_t here, const gps_location_degrees_t there);
-extern void save_to_nvs(const char* key, gps_location_degrees_t lat_long);
-extern gps_location_degrees_t read_from_nvs(const char* key);
+extern void save_lat_long_to_nvs(const char* key, gps_location_degrees_t lat_long);
+extern gps_location_degrees_t read_lat_long_from_nvs(const char *key);
+extern void save_int_to_nvs(const char* key, int32_t value);
+extern int32_t read_int_from_nvs(const char* key);
+

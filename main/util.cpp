@@ -54,9 +54,38 @@ float compute_distance_miles(const gps_location_degrees_t here, const gps_locati
 }
 
 /**
+ * Save an integer to non-volatile flash
+ */
+void save_int_to_nvs(const char* key, int32_t value) {
+    printf("Saving %s=%d\n", key, value);
+    nvs_handle_t h;
+    int err = nvs_open("storage", NVS_READWRITE, &h);
+    err = nvs_set_i32(h, key, value);
+    if (err != ESP_OK) {
+        fprintf(stderr, "Failed to write key %s\n", key);
+    }
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+/**
+ * Read an integer from non-volatile flash
+ */
+int32_t read_int_from_nvs(const char* key) {
+    nvs_handle_t h;
+    int err = nvs_open("storage", NVS_READWRITE, &h);
+    int32_t value = 0;
+    err = nvs_get_i32(h, key, &value);
+    if (err != ESP_OK) {
+        fprintf(stderr, "Failed to read key %s\n", key);
+    }
+    return value;
+}
+
+/**
  * Save a latitude/longitude structure to non-volatile flash
  */
-void save_to_nvs(const char* key, gps_location_degrees_t lat_long) {
+void save_lat_long_to_nvs(const char* key, gps_location_degrees_t lat_long) {
     printf("Saving lat=%f long=%f to NVS\n", lat_long.latitude, lat_long.longitude);
     nvs_handle_t h;
     int err = nvs_open("storage", NVS_READWRITE, &h);
@@ -73,7 +102,7 @@ void save_to_nvs(const char* key, gps_location_degrees_t lat_long) {
  * Read a latitude/longitude structure from non-volatile flash.
  * @return lat/long structure, which contains zeros if nothing could be read.
  */
-gps_location_degrees_t read_from_nvs(const char* key) {
+gps_location_degrees_t read_lat_long_from_nvs(const char* key) {
     nvs_handle_t h;
     int err = nvs_open("storage", NVS_READONLY, &h);
     gps_location_degrees_t lat_long = {0.0, 0.0};
