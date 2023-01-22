@@ -25,15 +25,13 @@
 #include "esp_adc_cal.h"
 #include "servo.h"
 
-
-
-// Pins used
+// ESP32 Resources
 const gpio_num_t SERVO_GPIO_PWM = GPIO_NUM_14;
 const ledc_timer_t ledc_timer = LEDC_TIMER_0;
 const ledc_channel_t ledc_channel = LEDC_CHANNEL_0;
 const adc1_channel_t ADC_CHANNEL= ADC1_CHANNEL_4;
 
-// PWM frequency
+// PWM
 const int PWM_FREQ_HZ = 50;
 const int PWM_PERIOD_US = 1.0/PWM_FREQ_HZ * 1000 * 1000;
 const ledc_timer_bit_t RESOLUTION_BIT = LEDC_TIMER_10_BIT;
@@ -50,18 +48,17 @@ const unsigned DEAD_BAND_UPPER_US = 1520;
 const unsigned DEAD_BAND_CENTER_US = (DEAD_BAND_LOWER_US + DEAD_BAND_UPPER_US)/2;
 
 // Minimum viable pulse width that causes movement
-const unsigned MINIMUM_SPEED_US = DEAD_BAND_UPPER_US + 20;
+const unsigned MINIMUM_PULSE_WIDTH_US = DEAD_BAND_UPPER_US + 20;
 
 // ADC for reading back position
 const int  V_REF_MV = 1100; // mv
 static esp_adc_cal_characteristics_t characteristics;
 static float V_MAX = 3.0;
 
-// Control loop
-// Gain
+// Control loop gain
 const float K = 0.005;
 
-// Fastest rate we will allow to be commanded
+// Fastest rate we will allow to be commanded [0 - 1.0]
 const rotation_rate_t RATE_LIMIT = 0.25;
 
 /**
@@ -109,7 +106,7 @@ static void set_pulse_width(unsigned width_us) {
 }
 
 /**
- * Sets the servo rotation rate between (-1.0, 1.0)
+ * Sets the servo rotation rate between [-1.0, 1.0]
  */
 static void set_rate(rotation_rate_t rate) {
     set_pulse_width(rate_to_pulse_width(rate));
@@ -121,7 +118,7 @@ static void set_rate(rotation_rate_t rate) {
 */
 
 /**
- * Returns the servo position estimate in degrees.
+ * Returns the servo position estimate in degrees
  */
 relative_degrees_t servo_get_position() {
     return read_adc() * 360 / V_MAX;
@@ -131,7 +128,7 @@ relative_degrees_t servo_get_position() {
  * Drive the servo continually at the lowest rate
  */
 void servo_drive_slow() {
-    set_pulse_width(MINIMUM_SPEED_US);
+    set_pulse_width(MINIMUM_PULSE_WIDTH_US);
 }
 
 /**
@@ -156,6 +153,8 @@ servo_status_t servo_update(relative_degrees_t target_degrees) {
     }
 
     rotation_rate_t rate = K * delta;
+
+    // TODO: add a LPF
     
     set_rate(rate);
     
@@ -196,7 +195,7 @@ bool servo_init() {
     channel_config_.intr_type = LEDC_INTR_DISABLE;
     channel_config_.timer_sel = ledc_timer;
     channel_config_.duty = 0;
-    channel_config_.hpoint = 0; /// FIXME: what is this?
+    channel_config_.hpoint = 0;
 
     ledc_channel_config(&channel_config_);
 
