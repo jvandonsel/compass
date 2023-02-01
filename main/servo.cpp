@@ -59,7 +59,7 @@ static float V_MAX = 3.0;
 const float K = 0.005;
 
 // Fastest rate we will allow to be commanded [0 - 1.0]
-const rotation_rate_t RATE_LIMIT = 0.25;
+const rotation_rate_t RATE_LIMIT = 0.23;
 
 /**
  * Fetch a single voltage value from the ADC.

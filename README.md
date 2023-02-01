@@ -6,14 +6,15 @@ This project isn't my original idea (precedents [here](https://hackaday.com/2016
 a needle that always points home.  Well, it can point anywhere you want, but I've configured
 mine to always point home.  Using GPS and a magnetometer it figures out where it is
 and where home is, and moves a servo to put the needle in the right location. Ideally, it should
-look like magic.
+be indistinguishable from magic.
 
 ## Hardware
 - ESP32 (I'm using a HUZZAH32 board from [AdaFruit](https://www.adafruit.com/), based on the Espressif WROOM32 chip)
 - GPS Module (I'm using the MTK3339 GPS chipset from AdaFruit)
 - Accelerometer/Magnetometer (I'm using the LSM303AGR from AdaFruit)
 - Servo (I'm using the Parallax 360 degree feedback servo from AdaFruit)
-- Wooden box, brass needle, power supply, hardware, etc.
+- Wooden box, brass clock hand as a pointer, power supply, hardware, etc.
+
 
 
 ## Building
@@ -22,7 +23,7 @@ Assumes you have the [Espressive SDK](https://www.espressif.com) installed as we
 Use `build.sh` to build.
 
 ## Flashing
-Use `flash.sh` to flash the ESP32, changing the serial port in the script as necessary
+Use `flash.sh` to flash the ESP32, changing the serial port in the script as necessary.
 
 ## Non-Volatile Storage
 NVS is used to store:
@@ -31,8 +32,10 @@ NVS is used to store:
 * The home location coordinates
 * Pointer position correction
 
+
 ## Serial Console
-There's a rudimentary console program running in the background, allowing you to configure and monitor a few things.
+There's a rudimentary console program running in the background, allowing you to configure and monitor a few things assuming
+you have a serial terminal connected to your ESP32.
 
 Console commands:
 
@@ -46,5 +49,5 @@ Console commands:
 * **boston** - Set the home location to Boston Common, and save to non-volatile storage
 * **waltham** - Set the home location to Waltham, Massachusetts, and save to non-volatile storage
 * **north** - Set the home location to the North Pole, and save to non-volatile storage
-* **south** - Set the home location to the Soutn Pole, and save to non-volatile storage
+* **south** - Set the home location to the South Pole, and save to non-volatile storage
 

@@ -34,7 +34,7 @@ const gps_location_degrees_t SOUTH_POLE_LOC = {-90.0, 0.0};
 // Non-volatile storage (NVS) keys
 const char NVS_KEY_GPS[] = "gps";
 const char NVS_KEY_HOME[] = "home";
-const char NVS_KEY_POINTER_OFFSET[] = "offset";
+const char NVS_KEY_POINTER_CAL_OFFSET[] = "offset";
 
 // How often to write the GPS position to NVS
 const unsigned FLASH_WRITE_INTERVAL_SECS = 600;
@@ -49,16 +49,21 @@ const int LOOP_SLEEP_TICKS = pdMS_TO_TICKS(LOOP_SLEEP_MS);
  */
 // GPS location to point to. Will be read from flash at startup.
 gps_location_degrees_t home_location;
+
 // Pointer offset for pointer positioning correction. Will be read from flash at startup.
-relative_degrees_t pointer_offset = 0;
+relative_degrees_t pointer_cal_offset = 0;
+
 // To log or not to log
 bool do_logging = false;
+
 // Last known good GPS location (may be one saved to flash)
-gps_location_degrees_t last_known_good_gps_location;
-// Current GPS location in use
-gps_location_degrees_t current_gps_location;
+gps_location_degrees_t last_good_gps_loc;
+
 // Compass heading of this device
 compass_degrees_t heading;
+
+// If we have GPS lock
+bool is_gps_locked = false;
 
 /**
  * Top-level loop.
@@ -68,57 +73,55 @@ void controllerTask() {
       Try to read any saved GPS position as a starting point. This allows for a
      faster startup if the user powers it up in the previous location. Of course,
      if the device has moved since the last GPS lock, then the position and thus
-     the pointer direction will be wrong for a while.
+     the pointer direction will be wrong until we re-acquire lock..
     */
-
-    /*
-    last_known_good_gps_location = read_from_nvs(NVS_KEY_GPS);
-    std::cout << "Read saved GPS " << last_known_good_gps_location.toString() << "from NVS" << std::endl;
-    */
+    last_good_gps_loc = read_lat_long_from_nvs(NVS_KEY_GPS);
+    std::cout << "Read saved GPS " << last_good_gps_loc.toString() << "from NVS" << std::endl;
 
     // Read our home (target) location from NVS
     home_location = read_lat_long_from_nvs(NVS_KEY_HOME);
-    std::cout << "Read saved home " << home_location.toString() << "from NVS" << std::endl;
+    std::cout << "Read saved home " << home_location.toString() << " from NVS" << std::endl;
 
-    // Read the pointer offset from NVS
-    pointer_offset = read_int_from_nvs(NVS_KEY_POINTER_OFFSET);
-    std::cout << "Read pointer offset " << pointer_offset << "from NVS" << std::endl;
+    // Read the pointer calibration offset from NVS
+    pointer_cal_offset = read_int_from_nvs(NVS_KEY_POINTER_CAL_OFFSET);
+    std::cout << "Read pointer calibration offset " << pointer_cal_offset << " from NVS" << std::endl;
 
     // The last time we wrote the GPS position to flash, in ticks since startup.
     unsigned last_flash_write_ticks = 0;
 
+    
     while (true) {
         const unsigned ticks = xTaskGetTickCount();
 
         // Read sensors
         heading = magneto_read();
-        current_gps_location = gps_read();
+        gps_location_degrees_t live_gps;
+        live_gps = gps_read();
 
-        if (!current_gps_location.isValid()) {
-            // No good GPS reading this time. Use our last known good one.
-            current_gps_location = last_known_good_gps_location;
-        } else {
-            // Save this GPS reading as our last known good one.
-            last_known_good_gps_location = current_gps_location;
+        is_gps_locked = live_gps.isValid();
 
-            // And save to non-volatile storage.
-            // But we don't want to continually write to flash every loop, so
-            // only write every N seconds.
+        if (is_gps_locked) {
+            // Use the live GPS location
+            // Save it in memory in case we lose GPS lock
+            last_good_gps_loc = live_gps;
+            
+            // Save to non-volatile storage.
+            // But we don't want to continually write to flash every loop, so only write every N seconds.
             if (ticks - last_flash_write_ticks > FLASH_WRITE_INTERVAL_TICKS || last_flash_write_ticks == 0) {
-                save_lat_long_to_nvs(NVS_KEY_GPS, current_gps_location);
+                save_lat_long_to_nvs(NVS_KEY_GPS, live_gps);
                 last_flash_write_ticks = ticks;
             }
         }
 
-        if (!current_gps_location.isValid()) {
-            // No GPS position yet.
+        if (!last_good_gps_loc.isValid()) {
+            // No GPS position yet (either live or saved)
             // Drive the servo continuously at a low rate while we wait for GPS to sync.
             servo_drive_slow();
             relative_degrees_t servo_ps = servo_get_position();
 
             if (do_logging) {
                 printf(
-                    "[%u]\t"
+                    "[%u]No GPS lock\t"
                     "Mag True: %d\t"
                     "Srv Pos: %d\t\n",
                     ticks,
@@ -129,23 +132,23 @@ void controllerTask() {
             // We have a valid GPS position (either live or saved)
 
             // Compute heading from our GPS position to the target lat/long
-            const compass_degrees_t target_compass_bearing = compute_bearing(current_gps_location, home_location);
+            const compass_degrees_t target_bearing = compute_bearing(last_good_gps_loc, home_location);
 
             // Compute next servo position, based on heading
-            relative_degrees_t target_servo_position = target_compass_bearing - heading + pointer_offset;
+            relative_degrees_t target_servo_position = target_bearing - heading + pointer_cal_offset;
             if (target_servo_position < 0) {
                 target_servo_position += 360;
             }
             // Update servo
             const servo_status_t servo_status = servo_update(target_servo_position);
 
-            // Not required, but interesting, maybe.
-            const float dist_miles = compute_distance_miles(current_gps_location, home_location);
+            // Not required, but nice to see
+            const float dist_miles = compute_distance_miles(last_good_gps_loc, home_location);
 
             if (do_logging) {
                 printf(
                     "[%u]\t"
-                    "GPS: %18s  "
+                    "GPS: %18s %6s  "
                     "Target: %18s   "
                     "Mag True: %3d   "
                     "Bearing: %3d   "
@@ -155,10 +158,11 @@ void controllerTask() {
                     "Srv Rate: %8.3f    "
                     "Dist: %.0f mi\n",
                     ticks,
-                    current_gps_location.toString().c_str(),
+                    last_good_gps_loc.toString().c_str(),
+                    is_gps_locked ? "LOCKED" : "SEARCH",
                     home_location.toString().c_str(),
                     heading,
-                    target_compass_bearing, pointer_offset, target_servo_position,
+                    target_bearing, pointer_cal_offset, target_servo_position,
                     servo_status.relative_pos, servo_status.rate, dist_miles);
             }
         }
@@ -184,8 +188,8 @@ static int set_canned_location(gps_location_degrees_t loc) {
  * Console command handler for reading GPS location from NVS
  */
 static int read_gps_location(int argc, char **argv) {
-    last_known_good_gps_location = read_lat_long_from_nvs(NVS_KEY_GPS);
-    std::cout << "Read saved GPS " << last_known_good_gps_location.toString() << "from NVS" << std::endl;
+    last_good_gps_loc = read_lat_long_from_nvs(NVS_KEY_GPS);
+    std::cout << "Read saved GPS " << last_good_gps_loc.toString() << "from NVS" << std::endl;
     return 0;
 }
 
@@ -193,8 +197,8 @@ static int read_gps_location(int argc, char **argv) {
  * Console command handler for saving GPS location to NVS
  */
 static int save_gps_location(int argc, char **argv) {
-    save_lat_long_to_nvs(NVS_KEY_GPS, current_gps_location);
-    std::cout << "Saving GPS " << current_gps_location.toString() << "to NVS" << std::endl;
+    save_lat_long_to_nvs(NVS_KEY_GPS, last_good_gps_loc);
+    std::cout << "Saving GPS " << last_good_gps_loc.toString() << "to NVS" << std::endl;
     return 0;
 }
 
@@ -207,11 +211,11 @@ static int set_pointer_offset(int argc, char **argv) {
         return 0;
     }
 
-    pointer_offset = atoi(argv[1]);
-    std::cout << "Setting pointer offset to " << pointer_offset << std::endl;
+    pointer_cal_offset = atoi(argv[1]);
+    std::cout << "Setting pointer offset to " << pointer_cal_offset << std::endl;
 
     // Save to flash
-    save_int_to_nvs(NVS_KEY_POINTER_OFFSET, pointer_offset);
+    save_int_to_nvs(NVS_KEY_POINTER_CAL_OFFSET, pointer_cal_offset);
     return 0;
 }
 
@@ -240,10 +244,10 @@ static int set_home_location(int argc, char **argv) {
 static int print_status(int argc, char **argv) {
     do_logging = false;
     std::cout << "Home location:\t\t\t" << home_location.toString() << std::endl;
-    std::cout << "Current GPS lat/long:\t\t" << current_gps_location.toString() << std::endl;
-    std::cout << "Last known good GPS lat/long:\t" << last_known_good_gps_location.toString() << std::endl;
+    std::cout << "Current GPS lat/long:\t\t" << last_good_gps_loc.toString() << std::endl;
+    std::cout << "GPS Locked:\t" << is_gps_locked << std::endl;
     std::cout << "Magnetic Heading:\t\t" << heading << " degrees" << std::endl;
-    std::cout << "Pointer Offset:\t\t\t" << pointer_offset << " degrees" << std::endl;
+    std::cout << "Pointer Offset:\t\t\t" << pointer_cal_offset << " degrees" << std::endl;
     return 0;
 }
 
@@ -307,7 +311,7 @@ extern "C" void app_main() {
 
     const esp_console_cmd_t read_gps_cmd = {
         .command = "read",
-        .help = "Read saved GPS position from NVS",
+        .help = "Read saved GPS position from flash",
         .hint = NULL,
         .func = &read_gps_location,
         .argtable = nullptr};
@@ -315,7 +319,7 @@ extern "C" void app_main() {
     
     const esp_console_cmd_t save_gps_cmd = {
         .command = "save",
-        .help = "Save current GPS position to NVS",
+        .help = "Save current GPS position to flash",
         .hint = NULL,
         .func = &save_gps_location,
         .argtable = nullptr};
@@ -323,7 +327,7 @@ extern "C" void app_main() {
 
     const esp_console_cmd_t offset_cmd = {
         .command = "offset",
-        .help = "Set pointer offset in degrees",
+        .help = "Set pointer calibration offset in degrees",
         .hint = NULL,
         .func = &set_pointer_offset,
         .argtable = nullptr};

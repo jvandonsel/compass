@@ -48,8 +48,8 @@ bool gps_init() {
 }
 
 /**
- * Convert DDMM.MM or DDDMM.MM to fractional degrees.
- * @return fractional degrees
+ * Convert DDMM.MM or DDDMM.MM to degrees.
+ * @return degrees
  */
 static float dm_to_degrees(float dm) {
     const int degrees = dm / 100;
