@@ -1,1 +1,5 @@
 build/
+README.html
+compile_commands.json
+.cache
+.vscode

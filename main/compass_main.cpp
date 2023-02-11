@@ -26,8 +26,9 @@
  * Constants
  */
 // Some canned locations, for convenience of testing
-const gps_location_degrees_t WALTHAM_LOC = { 42.36113692296913, -71.24715639837349};
-const gps_location_degrees_t BOSTON_LOC  = { 42.35435968945194, -71.0655565086987};
+const gps_location_degrees_t WALTHAM_LOC = {42.36113692296913, -71.24715639837349};
+const gps_location_degrees_t BOSTON_LOC = {42.35435968945194, -71.0655565086987};
+const gps_location_degrees_t DELMAR_LOC = {42.61873091440556, -73.85034910259388};
 const gps_location_degrees_t NORTH_POLE_LOC = {90.0, 0.0};
 const gps_location_degrees_t SOUTH_POLE_LOC = {-90.0, 0.0};
 
@@ -70,10 +71,10 @@ bool is_gps_locked = false;
  */
 void controllerTask() {
     /*
-      Try to read any saved GPS position as a starting point. This allows for a
+     Try to read any saved GPS position as a starting point. This allows for a
      faster startup if the user powers it up in the previous location. Of course,
      if the device has moved since the last GPS lock, then the position and thus
-     the pointer direction will be wrong until we re-acquire lock..
+     the pointer direction will be wrong until we re-acquire lock.
     */
     last_good_gps_loc = read_lat_long_from_nvs(NVS_KEY_GPS);
     std::cout << "Read saved GPS " << last_good_gps_loc.toString() << "from NVS" << std::endl;
@@ -174,7 +175,7 @@ void controllerTask() {
 /**
  * Set the location to the given value
  */
-static int set_canned_location(gps_location_degrees_t loc) {
+static int set_home_location(gps_location_degrees_t loc) {
 
     home_location = loc;
     std::cout << "Setting home location to: " << home_location.toString() << std::endl;
@@ -187,7 +188,7 @@ static int set_canned_location(gps_location_degrees_t loc) {
 /**
  * Console command handler for reading GPS location from NVS
  */
-static int read_gps_location(int argc, char **argv) {
+static int read_gps_location_handler(int argc, char **argv) {
     last_good_gps_loc = read_lat_long_from_nvs(NVS_KEY_GPS);
     std::cout << "Read saved GPS " << last_good_gps_loc.toString() << "from NVS" << std::endl;
     return 0;
@@ -196,7 +197,7 @@ static int read_gps_location(int argc, char **argv) {
 /**
  * Console command handler for saving GPS location to NVS
  */
-static int save_gps_location(int argc, char **argv) {
+static int save_gps_location_handler(int argc, char **argv) {
     save_lat_long_to_nvs(NVS_KEY_GPS, last_good_gps_loc);
     std::cout << "Saving GPS " << last_good_gps_loc.toString() << "to NVS" << std::endl;
     return 0;
@@ -205,7 +206,7 @@ static int save_gps_location(int argc, char **argv) {
 /**
  * Console command handler for setting the pointer offset
  */
-static int set_pointer_offset(int argc, char **argv) {
+static int set_pointer_offset_handler(int argc, char **argv) {
     if (argc != 2) {
         std::cout << "Invalid command . Usage is 'offset <degrees>>'" << std::endl;
         return 0;
@@ -222,7 +223,7 @@ static int set_pointer_offset(int argc, char **argv) {
 /**
  * Console command handler for setting the home location.
  */
-static int set_home_location(int argc, char **argv) {
+static int set_home_location_handler(int argc, char **argv) {
     if (argc != 3) {
         std::cout << "Invalid command . Usage is 'home <latitude> <longitude>'" << std::endl;
         std::cout << "(where latitude is positive in the N hemisphere, and longitude is negative in the W hemisphere)" << std::endl;
@@ -241,7 +242,7 @@ static int set_home_location(int argc, char **argv) {
 /**
  * Console command handler for printing status
  */
-static int print_status(int argc, char **argv) {
+static int print_status_handler(int argc, char **argv) {
     do_logging = false;
     std::cout << "Home location:\t\t\t" << home_location.toString() << std::endl;
     std::cout << "Current GPS lat/long:\t\t" << last_good_gps_loc.toString() << std::endl;
@@ -254,7 +255,7 @@ static int print_status(int argc, char **argv) {
 /**
  * Console command handler for toggling logging on/off
  */
-static int toggle_logging(int argc, char **argv) {
+static int toggle_logging_handler(int argc, char **argv) {
     do_logging = !do_logging;
     return 0;
 }
@@ -262,7 +263,7 @@ static int toggle_logging(int argc, char **argv) {
 /**
  * Console command handler for printing the about mesage
  */
-static int about(int argc, char **argv) {
+static int about_handler(int argc, char **argv) {
     std::cout << "Magic Compass" << std::endl;
     std::cout << "Designed and built by Jim Van Donsel, January 2023." << std::endl;
     return 0;
@@ -289,7 +290,7 @@ extern "C" void app_main() {
         .command = "status",
         .help = "Show status",
         .hint = NULL,
-        .func = &print_status,
+        .func = &print_status_handler,
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&status_cmd));
 
@@ -297,7 +298,7 @@ extern "C" void app_main() {
         .command = "log",
         .help = "Toggle logging",
         .hint = NULL,
-        .func = &toggle_logging,
+        .func = &toggle_logging_handler,
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&logging_cmd));
 
@@ -305,23 +306,23 @@ extern "C" void app_main() {
         .command = "about",
         .help = "About this device",
         .hint = NULL,
-        .func = &about,
+        .func = &about_handler,
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&about_cmd));
 
     const esp_console_cmd_t read_gps_cmd = {
-        .command = "read",
+        .command = "read-gps",
         .help = "Read saved GPS position from flash",
         .hint = NULL,
-        .func = &read_gps_location,
+        .func = &read_gps_location_handler,
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&read_gps_cmd));
     
     const esp_console_cmd_t save_gps_cmd = {
-        .command = "save",
+        .command = "save-gps",
         .help = "Save current GPS position to flash",
         .hint = NULL,
-        .func = &save_gps_location,
+        .func = &save_gps_location_handler,
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&save_gps_cmd));
 
@@ -329,7 +330,7 @@ extern "C" void app_main() {
         .command = "offset",
         .help = "Set pointer calibration offset in degrees",
         .hint = NULL,
-        .func = &set_pointer_offset,
+        .func = &set_pointer_offset_handler,
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&offset_cmd));
 
@@ -337,7 +338,7 @@ extern "C" void app_main() {
         .command = "home",
         .help = "Set home latitude, longitude",
         .hint = NULL,
-        .func = &set_home_location,
+        .func = &set_home_location_handler,
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&home_loc_cmd));
 
@@ -345,7 +346,7 @@ extern "C" void app_main() {
         .command = "boston",
         .help = "Set home location to Boston, MA",
         .hint = NULL,
-        .func = ([](int argc, char** argv){set_canned_location(BOSTON_LOC); return 0;}),
+        .func = ([](int argc, char** argv){set_home_location(BOSTON_LOC); return 0;}),
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&boston_loc_cmd));
 
@@ -353,15 +354,23 @@ extern "C" void app_main() {
         .command = "waltham",
         .help = "Set home location to Waltham, MA",
         .hint = NULL,
-        .func = ([](int argc, char** argv){set_canned_location(WALTHAM_LOC); return 0;}),
+        .func = ([](int argc, char** argv){set_home_location(WALTHAM_LOC); return 0;}),
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&waltham_loc_cmd));
+
+    const esp_console_cmd_t delmar_loc_cmd = {
+        .command = "delmar",
+        .help = "Set home location to Delmar, NY",
+        .hint = NULL,
+        .func = ([](int argc, char** argv){set_home_location(DELMAR_LOC); return 0;}),
+        .argtable = nullptr};
+    ESP_ERROR_CHECK(esp_console_cmd_register(&delmar_loc_cmd));
 
     const esp_console_cmd_t north_loc_cmd = {
         .command = "north",
         .help = "Set home location to the North Pole",
         .hint = NULL,
-        .func = ([](int argc, char** argv){set_canned_location(NORTH_POLE_LOC); return 0;}),
+        .func = ([](int argc, char** argv){set_home_location(NORTH_POLE_LOC); return 0;}),
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&north_loc_cmd));
 
@@ -369,7 +378,7 @@ extern "C" void app_main() {
         .command = "south",
         .help = "Set home location to the South Pole",
         .hint = NULL,
-        .func = ([](int argc, char** argv){set_canned_location(SOUTH_POLE_LOC); return 0;}),
+        .func = ([](int argc, char** argv){set_home_location(SOUTH_POLE_LOC); return 0;}),
         .argtable = nullptr};
     ESP_ERROR_CHECK(esp_console_cmd_register(&south_loc_cmd));
 
