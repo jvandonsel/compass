@@ -20,8 +20,6 @@
 #include "servo.h"
 #include "util.h"
 
-
-
 /**
  * Constants
  */
@@ -246,7 +244,7 @@ static int print_status_handler(int argc, char **argv) {
     do_logging = false;
     std::cout << "Home location:\t\t\t" << home_location.toString() << std::endl;
     std::cout << "Current GPS lat/long:\t\t" << last_good_gps_loc.toString() << std::endl;
-    std::cout << "GPS Locked:\t" << is_gps_locked << std::endl;
+    std::cout << "GPS Locked:\t" << (is_gps_locked ? "Yes" : "No")  << std::endl;
     std::cout << "Magnetic Heading:\t\t" << heading << " degrees" << std::endl;
     std::cout << "Pointer Offset:\t\t\t" << pointer_cal_offset << " degrees" << std::endl;
     return 0;

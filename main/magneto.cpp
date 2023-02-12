@@ -2,6 +2,11 @@
  * LSM303AGR Magnetometer for Magic Compass.
  * Interface is I2C
  *
+ * My LSM303AGR unit arrived calibrated and the x and y magnetic components seemed to be working
+ * well. Then at some point during my testing it went completely wonky and I needed to determine
+ * some correction offsets on x and y. These are applied here as MAG_CAL_OFFSET_X and
+ * MAG_CAL_OFFSET_Y. These values will certainly need to be changed for a different unit.
+ *
  * Author: J Van Donsel
  * Date: 12/29/2022
  */
@@ -13,6 +18,9 @@
 #include "util.h"
 #include "driver/i2c.h"
 
+/*
+  I2C
+*/
 #define I2C_MASTER_SCL_IO GPIO_NUM_22
 #define I2C_MASTER_SDA_IO GPIO_NUM_23
 #define I2C_MASTER_NUM 0            /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
@@ -31,6 +39,7 @@
 #define LSM303_CTRL_REG1_ACCEL 0x20
 
 // Accelerometer
+#define LSM303_WHO_AM_I_A_REG_ADDR 0x0F
 #define LSM303_OUTX_L_REG_ACCEL 0x28
 #define LSM303_OUTX_H_REG_ACCEL 0x29
 #define LSM303_OUTY_L_REG_ACCEL 0x2A
@@ -38,17 +47,14 @@
 #define LSM303_OUTZ_L_REG_ACCEL 0x2C
 #define LSM303_OUTZ_H_REG_ACCEL 0x2D
 
-#define LSM303_WHO_AM_I_M_REG_ADDR 0x4F
-#define LSM303_WHO_AM_I_A_REG_ADDR 0x0F
-
-#define LSM303_CFG_REG_A_MAG  0x60
-#define LSM303_STATUS_REG_MAG 0x67
-
 // Magneto
 #define LSM303_OFFSETX_L_REG_MAG 0x45
 #define LSM303_OFFSETX_H_REG_MAG 0x46
 #define LSM303_OFFSETY_L_REG_MAG 0x47
 #define LSM303_OFFSETY_H_REG_MAG 0x48
+#define LSM303_WHO_AM_I_M_REG_ADDR 0x4F
+#define LSM303_CFG_REG_A_MAG  0x60
+#define LSM303_STATUS_REG_MAG 0x67
 #define LSM303_OUTX_L_REG_MAG 0x68
 #define LSM303_OUTX_H_REG_MAG 0x69
 #define LSM303_OUTY_L_REG_MAG 0x6A
