@@ -147,9 +147,9 @@ servo_status_t servo_update(relative_degrees_t target_degrees) {
     relative_degrees_t delta =  target_degrees - pos;
 
     if (delta > 180) {
-        delta = 360 - delta;
+        delta = delta - 360;
     } else if (delta < -180) {
-        delta = 380 + delta;
+        delta = 360 + delta;
     }
 
     rotation_rate_t rate = K * delta;
