@@ -24,6 +24,7 @@
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 #include "servo.h"
+#include "util.h"
 
 // ESP32 Resources
 const gpio_num_t SERVO_GPIO_PWM = GPIO_NUM_14;
@@ -48,17 +49,23 @@ const unsigned DEAD_BAND_UPPER_US = 1520;
 const unsigned DEAD_BAND_CENTER_US = (DEAD_BAND_LOWER_US + DEAD_BAND_UPPER_US)/2;
 
 // Minimum viable pulse width that causes movement
-const unsigned MINIMUM_PULSE_WIDTH_US = DEAD_BAND_UPPER_US + 20;
+const unsigned MINIMUM_PULSE_WIDTH_UPPER_US = DEAD_BAND_UPPER_US + 20;
+const unsigned MINIMUM_PULSE_WIDTH_LOWER_US = DEAD_BAND_LOWER_US - 20;
+
+// Target accuracy in degrees. Needed because of the large dead band.
+const relative_degrees_t POSITION_THRESHOLD = 10;
 
 // ADC for reading back position
 const int  V_REF_MV = 1100; // mv
 static esp_adc_cal_characteristics_t characteristics;
 static float V_MAX = 3.0;
 
-// Control loop gain
-const float K = 0.005;
+// Control loop gains
+const float K_PROP = 0.005; // proportional
+const float K_INT  = 0.000; // integrator
+const float K_DER  = 0.000; // differential
 
-// Fastest rate we will allow to be commanded [0 - 1.0]
+// Fastest rotation rate we will allow to be commanded [0 - 1.0]
 const rotation_rate_t RATE_LIMIT = 0.23;
 
 /**
@@ -128,36 +135,65 @@ relative_degrees_t servo_get_position() {
  * Drive the servo continually at the lowest rate
  */
 void servo_drive_slow() {
-    set_pulse_width(MINIMUM_PULSE_WIDTH_US);
+    set_pulse_width(MINIMUM_PULSE_WIDTH_UPPER_US);
 }
 
 /**
- * Attempt to slew the servo to the specified orientation.
- * The result is a rate sent to the servo. This function
- * needs to be called periodically, or else the servo
- * will go right past the target.
+ * Attempt to slew the servo to the specified orientation. The result is a rate sent to the servo.
+ * This function needs to be called periodically.
  *
  * @param target_degrees Target orientation in degrees.
  * @return Position and rate
  *
-
  */
 servo_status_t servo_update(relative_degrees_t target_degrees) {
-    relative_degrees_t pos = servo_get_position();
-    relative_degrees_t delta =  target_degrees - pos;
+    static relative_degrees_t last_delta;
+    static float integral = 0;
 
+    // Compute position error in degrees.
+    const relative_degrees_t pos = servo_get_position();
+    relative_degrees_t delta = target_degrees - pos;
+
+    // Find nearest direction
     if (delta > 180) {
         delta = delta - 360;
     } else if (delta < -180) {
         delta = 360 + delta;
     }
 
-    rotation_rate_t rate = K * delta;
+    // PID controller
+    float TICK = 0.250;
+    integral += delta * TICK;
+    float derivative = (delta - last_delta) / TICK;
+    last_delta = delta;
+    rotation_rate_t rate = K_PROP * delta + K_INT * integral + K_DER * derivative;
 
-    // TODO: add a LPF
+    //printf("delta=%d rate=%f integral=%f drv=%f\n", delta, rate, integral, derivative);
+
+    // Our servo has a large dead band, meaning that low velocity commands are ignored.
+    // So we do some ad hoc adjustments here.
     
+    /* DISABLED for now. Causes oscillations.
+    const unsigned pulse_width = rate_to_pulse_width(rate);
+    if (MINIMUM_PULSE_WIDTH_LOWER_US < pulse_width && pulse_width < MINIMUM_PULSE_WIDTH_UPPER_US) {
+        // Our commanded rate would be in the dead band.
+        printf("In dead zone, delta=%d\n", delta);
+        if (abs(delta) > POSITION_THRESHOLD) {
+            // We're still not close enough to our target position, so bump up the rate above the dead band.
+            if (rate > 0) {
+                rate = MINIMUM_PULSE_WIDTH_UPPER_US;
+            } else {
+                rate = MINIMUM_PULSE_WIDTH_LOWER_US;
+            }
+        }
+    }
+    */
+
+    // Set the servo velocity
     set_rate(rate);
+
     
+    // Return status
     servo_status_t status;
     status.rate = rate;
     status.relative_pos = pos;
