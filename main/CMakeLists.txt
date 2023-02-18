@@ -4,7 +4,6 @@ idf_component_register(SRCS
                     "gps.cpp"
                     "servo.cpp"
                     "util.cpp"
-                    INCLUDE_DIRS "include"
-                    EMBED_FILES ../static/index.html)
+                    INCLUDE_DIRS "include")
 
 target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-format")
