@@ -18,7 +18,8 @@ This project isn't my original idea (precedents
 - Power switch with LED from Sparkfun
 - Wooden box, brass clock hand as a pointer, power supply, mounting hardware, etc.
 
-
+## Schematic
+[PDF Schematic](https://github.com/jvandonsel/compass/blob/main/Magic%20Compass%20Schematic.pdf).
 
 ## Building
 Assumes you have the [Espressive SDK](https://www.espressif.com) installed as well as [esptool](https://github.com/espressif/esptool)
@@ -62,7 +63,9 @@ position is acquired. GPS positions are periodically written back to NVS.
 
 ## Serial Console
 There's a rudimentary console program running in the background, allowing you to configure and monitor a few things assuming
-you have a serial terminal connected to your ESP32.
+you have a serial terminal connected to your ESP32 at 115200.  The hardware supports either running the ESP32 from the 5v supply
+coming on the microUSB connector from the voltage regulator, or disconnecting this cable and connecting a microUSB cable from a laptop,
+which allows you to use the serial console at the same time.
 
 Console commands:
 
