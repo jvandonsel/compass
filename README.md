@@ -18,6 +18,9 @@ This project isn't my original idea (precedents
 - Power switch with LED from Sparkfun
 - Wooden box, brass clock hand as a pointer, power supply, mounting hardware, etc.
 
+![](https://github.com/jvandonsel/compass/blob/main/MagicCompassExterior.jpg)
+![](https://github.com/jvandonsel/compass/blob/main/MagicCompassInterior.jpg)
+
 ## Schematic
 [PDF Schematic](https://github.com/jvandonsel/compass/blob/main/Magic%20Compass%20Schematic.pdf).
 
