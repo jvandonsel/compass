@@ -244,7 +244,8 @@ static int print_status_handler(int argc, char **argv) {
     do_logging = false;
     std::cout << "Home location:\t\t\t" << home_location.toString() << std::endl;
     std::cout << "Current GPS lat/long:\t\t" << last_good_gps_loc.toString() << std::endl;
-    std::cout << "GPS Locked:\t" << (is_gps_locked ? "Yes" : "No")  << std::endl;
+    std::cout << "Distance:\t\t\t" << compute_distance_miles(last_good_gps_loc, home_location) << " miles" << std::endl;
+    std::cout << "GPS Locked:\t\t\t" << (is_gps_locked ? "Yes" : "No")  << std::endl;
     std::cout << "Magnetic Heading:\t\t" << heading << " degrees" << std::endl;
     std::cout << "Pointer Offset:\t\t\t" << pointer_cal_offset << " degrees" << std::endl;
     return 0;
@@ -259,7 +260,7 @@ static int toggle_logging_handler(int argc, char **argv) {
 }
 
 /**
- * Console command handler for printing the about mesage
+ * Console command handler for printing the about message
  */
 static int about_handler(int argc, char **argv) {
     std::cout << "Magic Compass" << std::endl;

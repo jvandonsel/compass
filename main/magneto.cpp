@@ -19,8 +19,8 @@
 #include "driver/i2c.h"
 
 /*
-  I2C
-*/
+ * I2C
+ */
 #define I2C_MASTER_SCL_IO GPIO_NUM_22
 #define I2C_MASTER_SDA_IO GPIO_NUM_23
 #define I2C_MASTER_NUM 0            /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
@@ -34,8 +34,8 @@
 #define LSM303_MAG_SENSOR_ADDR 0x1E
 
 /*
-  Registers
-*/
+ * Registers
+ */
 #define LSM303_CTRL_REG1_ACCEL 0x20
 
 // Accelerometer
@@ -65,7 +65,6 @@
 
 // Emperically determined calibration constants, specific to my (possibly uncalibrated) device. Calculated by determining the middle x
 // and y raw values while rotating the device around the z axis in the absence of any extraneous magnetic fields.
-// TODO: put this in NVS
 const int16_t MAG_CAL_OFFSET_X = 200;
 const int16_t MAG_CAL_OFFSET_Y = -130;
 
@@ -192,12 +191,6 @@ compass_degrees_t magneto_read() {
     int16_t magneto_x, magneto_y;
     ESP_ERROR_CHECK(lsm303_mag_register_read(LSM303_OUTX_L_REG_MAG, (uint8_t*)&magneto_x,  2));
     ESP_ERROR_CHECK(lsm303_mag_register_read(LSM303_OUTY_L_REG_MAG, (uint8_t*)&magneto_y,  2));
-/*
-  int16_t accel_x, accel_y, accel_z;
-  ESP_ERROR_CHECK(lsm303_accel_register_read(LSM303_OUTX_L_REG_ACCEL, (uint8_t*)&accel_x,  2));
-  ESP_ERROR_CHECK(lsm303_accel_register_read(LSM303_OUTY_L_REG_ACCEL, (uint8_t*)&accel_y,  2));
-  ESP_ERROR_CHECK(lsm303_accel_register_read(LSM303_OUTZ_L_REG_ACCEL, (uint8_t*)&accel_z,  2));
-*/
 
     // Apply our calibration offsets
     magneto_x += MAG_CAL_OFFSET_X;
@@ -206,6 +199,7 @@ compass_degrees_t magneto_read() {
     // Calculate the angle of the x,y vector
     float heading = -(atan2((float)magneto_y, (float)magneto_x) * 180) / M_PI;
 
+    // Make it positive
     if (heading < 0) {
         heading = 360 + heading;
     }
